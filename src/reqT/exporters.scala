@@ -130,8 +130,58 @@ trait GraphVizGenerator extends Exporter {
 
 case object NestedGV extends GraphVizGenerator  
 
+trait GraphMLGenerator extends Exporter {
+  def formats = """
+  compound=true;overlap=false;rankdir=LR;clusterrank=local;
+  node [fontname="Sans", fontsize=9];
+  edge [fontname="Sans", fontsize=9];
+"""
+  
+  def style(elem: Elem): String = elem match {
+    case e: Entity => 
+      val (row1, row2) = (e.myType, e.id) 
+      s" [label=$q$row1$nlLitteral$row2$q, shape=box]"
+    case a: Attribute[_] => 
+      val (row1, row2) = (a.myType, a.value) 
+      s" [label=$q$row1$nlLitteral$row2$q, shape=box, style=rounded]"
+    case _ => ""
+  }
+  
+  def node(e: Elem, path: NodePath): String = s"  $q$path$e$q"
+  
+  def singleSubnodeLink(from: Entity, link: RelationType, to: Elem, path: NodePath): String = 
+    indent(path.level) + node(from, path) + style(from) + ";\n" +
+    indent(path.level) + node(to, path/from) + style(to) + ";\n" +
+    indent(path.level) + node(from, path) + " -> " + node(to, path/from) + s"[label=$link]" + ";\n"
+      
+  def subGraphPre(from: Entity, link: RelationType, to: Elem, path: NodePath): String =
+    indent(path.level) + node(from, path) + style(from) + ";\n" +
+    indent(path.level) + node(from, path) + " -> " + node(to, path/from) + 
+    s" [label=$link, lhead=${q}cluster_$from$q]" + ";\n" +
+    indent(path.level) + s"  subgraph ${q}cluster_$from$q { \n"
 
+  def exportModel(m: Model, path: NodePath): String = m.collect {
+    case n: Node => indent(path.level) + node(n, path) + style(n) +";\n"
+    case Relation(e1,l1,sub) => sub match {
+      case Model() => indent(path.level) + node(e1, path) + style(e1) +";\n" 
+      case Model(e2) if e2.isNode => singleSubnodeLink(e1, l1, e2, path)
+      case Model(Relation(e2, _ , Model())) => singleSubnodeLink(e1, l1, e2, path)
+      case Model(Relation(e2, l2, sub2)) if sub2.tip.size == 1 => 
+        singleSubnodeLink(e1, l1, e2, path) + 
+        singleSubnodeLink(e2, l2, sub2.tip.elems.head, path/e1) +
+        exportModel(sub2, path/e1/e2)
+      case _ => 
+        subGraphPre(e1, l1, sub.tip.elems.head, path) +
+        exportModel(sub, path/e1)  + indent(path.level + 1) + "}\n"
+    }
+  } .mkString
+    
+  override def preamble(m: Model): String = s"""digraph ${q}reqT.Model${q} { $nl$formats$nl"""
+  override def ending(m: Model): String = "\n}"
+  override def body(m: Model): String = exportModel(m.reverse,/)
+}
 
+case object NestedGML extends GraphMLGenerator
 
 
 
