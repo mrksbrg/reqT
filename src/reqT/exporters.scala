@@ -140,30 +140,25 @@ trait GraphMLGenerator extends Exporter {
   def style(elem: Elem): String = elem match {
     case e: Entity => 
       val (row1, row2) = (e.myType, e.id) 
-      s" [label=$q$row1$nlLitteral$row2$q, shape=box]"
+      s"ENTITY\n"
     case a: Attribute[_] => 
       val (row1, row2) = (a.myType, a.value) 
-      s" [label=$q$row1$nlLitteral$row2$q, shape=box, style=rounded]"
+      s"ATTRIBUTE\n"
     case _ => ""
   }
   
-  def node(e: Elem, path: NodePath): String = s"  $q$path$e$q"
+  def node(e: Elem, path: NodePath): String = s"<Node name=$e/>"
   
   def singleSubnodeLink(from: Entity, link: RelationType, to: Elem, path: NodePath): String = 
-    indent(path.level) + node(from, path) + style(from) + ";\n" +
-    indent(path.level) + node(to, path/from) + style(to) + ";\n" +
-    indent(path.level) + node(from, path) + " -> " + node(to, path/from) + s"[label=$link]" + ";\n"
+    "SINGLESUBNODELINK\n"
       
   def subGraphPre(from: Entity, link: RelationType, to: Elem, path: NodePath): String =
-    indent(path.level) + node(from, path) + style(from) + ";\n" +
-    indent(path.level) + node(from, path) + " -> " + node(to, path/from) + 
-    s" [label=$link, lhead=${q}cluster_$from$q]" + ";\n" +
-    indent(path.level) + s"  subgraph ${q}cluster_$from$q { \n"
+    "SUBGRAPHPRE\n"
 
   def exportModel(m: Model, path: NodePath): String = m.collect {
-    case n: Node => indent(path.level) + node(n, path) + style(n) +";\n"
+    case n: Node => node(n, path)
     case Relation(e1,l1,sub) => sub match {
-      case Model() => indent(path.level) + node(e1, path) + style(e1) +";\n" 
+      case Model() => node(e1, path)+";\n" 
       case Model(e2) if e2.isNode => singleSubnodeLink(e1, l1, e2, path)
       case Model(Relation(e2, _ , Model())) => singleSubnodeLink(e1, l1, e2, path)
       case Model(Relation(e2, l2, sub2)) if sub2.tip.size == 1 => 
